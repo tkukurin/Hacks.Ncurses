@@ -82,8 +82,8 @@ class Input:
     elif any(uiutils.is_key(k, c) for k in (
         curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
-    else:
-      s += chr(c)
+    elif (cstr := chr(c)).isprintable():
+      s += cstr
     self.stdscr.addstr(1, 1, s)
     self.state = s
     return self.state, status
@@ -111,6 +111,7 @@ if __name__ == '__main__':
   import sys
   dir_ = sys.argv[1] if len(sys.argv) > 1 else '.'
   args = os.listdir(os.path.expanduser(dir_))
+  args = [os.path.abspath(x) for x in args]
   result = curses.wrapper(filter_term, args)
-  print(result)
+  print(os.path.abspath(result))
 
