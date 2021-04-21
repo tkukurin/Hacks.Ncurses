@@ -108,10 +108,24 @@ def filter_term(stdscr, items: list):
 
 
 if __name__ == '__main__':
-  import sys
-  dir_ = sys.argv[1] if len(sys.argv) > 1 else '.'
-  args = os.listdir(os.path.expanduser(dir_))
-  args = [os.path.abspath(x) for x in args]
+  import argparse
+  parser = argparse.ArgumentParser()
+  parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
+  parser.add_argument('-d', '--dir', help='Directory to fuzzymatch')
+  flags = parser.parse_args()
+
+  args = []
+
+  if flags.dir:
+    args = os.listdir(os.path.expanduser(flags.dir))
+    args = [os.path.abspath(x) for x in args]
+
+  if flags.vals:
+    args += flags.vals
+
   result = curses.wrapper(filter_term, args)
-  print(os.path.abspath(result))
+  if flags.dir:
+    result = os.path.abspath(result)
+
+  print(result)
 
