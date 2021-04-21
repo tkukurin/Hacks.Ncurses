@@ -1,14 +1,11 @@
 import itertools as it
 import os
 import curses
-
-from curses import wrapper
-from curses import textpad
-
+import utils
 
 def emacs(stdscr):
   editwin = curses.newwin(5, 30, 2, 1)
-  box = textpad.Textbox(editwin)
+  box = curses.textpad.Textbox(editwin)
   box.edit()
   stdscr.addstr(2, 1, box.gather())
   stdscr.refresh()
@@ -25,13 +22,6 @@ def fuzzymatch(search_term_cased):
       iterm += (letter == search_term[iterm])
     return iterm == len(search_term)
   return fuzzy_inner
-
-
-# cf. https://stackoverflow.com/questions/32252733/interpreting-enter-keypress-in-stdscr-curses-module-in-python
-enter_keys = [curses.KEY_ENTER, 10, 13]
-backspace_keys = [curses.KEY_BACKSPACE, 127]
-ks = {k[0]:k for k in [enter_keys, backspace_keys]}
-is_key = lambda k, x: x in ks[k]
 
 
 class ListOption:
@@ -82,13 +72,13 @@ class Input:
     s = self.state
     c = self.stdscr.getch(self.pos, len(s) + 1)
     status = None
-    if is_key(curses.KEY_BACKSPACE, c):
+    if utils.is_key(curses.KEY_BACKSPACE, c):
       s = s[:-1]
       self.stdscr.addstr(self.pos, len(s) + 1, ' ')
-    elif c in (curses.KEY_DOWN, curses.KEY_UP, *enter_keys):
+    elif c in (curses.KEY_DOWN, curses.KEY_UP) or utils.is_key(curses.KEY_ENTER, c):
       status = c
     else:
-      s += chr(c) #+ str(c)
+      s += chr(c)
     self.stdscr.addstr(1, 1, s)
     self.state = s
     return self.state, status
@@ -106,49 +96,13 @@ def filter_(stdscr):
   while True:
     s, status = in_()
     items.apply(s)
-    if is_key(curses.KEY_ENTER, status):
+    if utils.is_key(curses.KEY_ENTER, status):
       return items.get()
     elif status is not None:
       items.handle(status)
     stdscr.refresh()
 
 
-def filter_str(stdscr):
-  items = os.listdir('.')
-  maxl = 0
-  for i, item in enumerate(items, start=2):
-    stdscr.addstr(i, 1, item)
-    maxl = max(maxl, len(item))
-
-  curses.echo()
-  s = ''
-  while True:
-    stdscr.addstr(1, 1, ' ' * len(s))
-    s = stdscr.getstr(1, 1).decode()
-    if s == 'q':
-      break
-    for i in range(2, len(items) + 2):
-      stdscr.addstr(i, 1, ' ' * maxl)
-    for i, item in enumerate(filter(fuzzymatch(s), items), start=2):
-      stdscr.addstr(i, 1, item)
-    stdscr.refresh()
-
-
-def main(stdscr):
-  # This raises ZeroDivisionError when i == 10.
-  for i in range(5):
-    stdscr.clear()
-    c = stdscr.getch()
-    v = i - 10
-    if c == ord('a'):
-      stdscr.addstr(0, 0, 'a')
-    else:
-      stdscr.addstr(0, 0, '10 divided by {} is {}'.format(v, 10/v))
-
-    stdscr.refresh()
-    stdscr.getkey()
-
-
-result = wrapper(filter_)
+result = curses.wrapper(filter_)
 print(result)
 
