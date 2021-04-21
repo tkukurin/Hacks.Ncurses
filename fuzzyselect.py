@@ -46,11 +46,24 @@ class ListRenderer:
     self.longest = max(map(len, items))
 
   def __call__(self, active, chosen):
-    for i in range(2, len(self.items) + 2):
-      self.stdscr.addstr(i, 1, ' ' * self.longest)
-    for i, item in enumerate(active, start=2):
-      attr = curses.A_REVERSE if i == chosen + 2 else 0
-      self.stdscr.addstr(i, 1, item, attr)
+    H, W = self.stdscr.getmaxyx()
+
+    H = min(H, len(self.items) + 2)
+    W = min(W, self.longest)
+
+    items_shown = H - 2
+    start_ix = max(0, chosen - items_shown + 1)
+    stop_ix = start_ix + items_shown
+
+    for i in range(2, H):
+      self.stdscr.addstr(i, 1, ' ' * W)
+
+    items_shown = it.islice(active, start_ix, stop_ix)
+    for i, item in enumerate(items_shown, start=2):
+      self.stdscr.addstr(i, 1, item)
+
+    if chosen < len(active):
+      self.stdscr.addstr(min(H - 1, chosen + 2), 1, active[chosen], curses.A_REVERSE)
 
 
 class Input:
@@ -96,7 +109,8 @@ def filter_term(stdscr, items: list):
 
 if __name__ == '__main__':
   import sys
-  args = os.listdir(sys.argv[1] if len(sys.argv) > 1 else '.')
+  dir_ = sys.argv[1] if len(sys.argv) > 1 else '.'
+  args = os.listdir(os.path.expanduser(dir_))
   result = curses.wrapper(filter_term, args)
   print(result)
 
