@@ -75,7 +75,8 @@ class Input:
     if utils.is_key(curses.KEY_BACKSPACE, c):
       s = s[:-1]
       self.stdscr.addstr(self.pos, len(s) + 1, ' ')
-    elif c in (curses.KEY_DOWN, curses.KEY_UP) or utils.is_key(curses.KEY_ENTER, c):
+    elif any(utils.is_key(k, c) for k in (
+        curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
     else:
       s += chr(c)
