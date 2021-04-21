@@ -1,21 +1,12 @@
 import itertools as it
 import os
 import curses
-import utils
-
-def emacs(stdscr):
-  editwin = curses.newwin(5, 30, 2, 1)
-  box = curses.textpad.Textbox(editwin)
-  box.edit()
-  stdscr.addstr(2, 1, box.gather())
-  stdscr.refresh()
-
-  stdscr.getkey()
+import uiutils
 
 
-def fuzzymatch(search_term_cased):
+def fuzzymatch(search_term_cased: str):
   search_term = search_term_cased.lower()
-  def fuzzy_inner(test_against):
+  def fuzzy_inner(test_against: str):
     iterm = 0
     for letter in test_against.lower():
       if iterm == len(search_term): break
@@ -45,7 +36,7 @@ class ListOption:
     return self.choice
 
   def get(self):
-    return self.active[self.choice]
+    return self.active[self.choice] if self.active else None
 
 
 class ListRenderer:
@@ -58,7 +49,7 @@ class ListRenderer:
     for i in range(2, len(self.items) + 2):
       self.stdscr.addstr(i, 1, ' ' * self.longest)
     for i, item in enumerate(active, start=2):
-      attr = curses.A_STANDOUT if i == chosen + 2 else 0
+      attr = curses.A_REVERSE if i == chosen + 2 else 0
       self.stdscr.addstr(i, 1, item, attr)
 
 
@@ -72,10 +63,10 @@ class Input:
     s = self.state
     c = self.stdscr.getch(self.pos, len(s) + 1)
     status = None
-    if utils.is_key(curses.KEY_BACKSPACE, c):
+    if uiutils.is_key(curses.KEY_BACKSPACE, c):
       s = s[:-1]
       self.stdscr.addstr(self.pos, len(s) + 1, ' ')
-    elif any(utils.is_key(k, c) for k in (
+    elif any(uiutils.is_key(k, c) for k in (
         curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
     else:
@@ -85,8 +76,7 @@ class Input:
     return self.state, status
 
 
-def filter_(stdscr):
-  items = os.listdir('.')
+def filter_term(stdscr, items: list):
   renderer = ListRenderer(items, stdscr)
   renderer(items, 0)
 
@@ -97,13 +87,16 @@ def filter_(stdscr):
   while True:
     s, status = in_()
     items.apply(s)
-    if utils.is_key(curses.KEY_ENTER, status):
+    if uiutils.is_key(curses.KEY_ENTER, status):
       return items.get()
     elif status is not None:
       items.handle(status)
     stdscr.refresh()
 
 
-result = curses.wrapper(filter_)
-print(result)
+if __name__ == '__main__':
+  import sys
+  args = os.listdir(sys.argv[1] if len(sys.argv) > 1 else '.')
+  result = curses.wrapper(filter_term, args)
+  print(result)
 

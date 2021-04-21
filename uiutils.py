@@ -1,4 +1,3 @@
-
 import curses
 
 # cf. https://stackoverflow.com/questions/32252733/interpreting-enter-keypress-in-stdscr-curses-module-in-python
