@@ -1,3 +1,11 @@
+#!/usr/bin/python
+
+'''Emulates fzf-like behavior.
+My attempt at learning Python ncurses.
+Example:
+  $ python fuzzyselect.py --dir .
+  $ python fuzzyselect.py first second third
+'''
 import itertools as it
 import os
 import curses
@@ -43,7 +51,7 @@ class ListRenderer:
   def __init__(self, items, stdscr):
     self.items = items
     self.stdscr = stdscr
-    self.longest = max(map(len, items))
+    self.longest = max(map(len, items), default=0)
 
   def __call__(self, active, chosen):
     H, W = self.stdscr.getmaxyx()
@@ -82,8 +90,12 @@ class Input:
     elif any(uiutils.is_key(k, c) for k in (
         curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
-    elif (cstr := chr(c)).isprintable():
-      s += cstr
+    else:
+      try:
+        if (cstr := chr(c)).isprintable():
+          s += cstr
+      except:
+        pass
     self.stdscr.addstr(1, 1, s)
     self.state = s
     return self.state, status
@@ -108,22 +120,41 @@ def filter_term(stdscr, items: list):
 
 
 if __name__ == '__main__':
+  import sys
   import argparse
   parser = argparse.ArgumentParser()
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
-  parser.add_argument('-d', '--dir', help='Directory to fuzzymatch')
+  parser.add_argument(
+    '-d', '--dir', help='Directory to fuzzymatch', nargs='?', const=True)
   flags = parser.parse_args()
 
   args = []
 
-  if flags.dir:
+  if flags.dir and isinstance(flags.dir, str):
     args = os.listdir(os.path.expanduser(flags.dir))
-    args = [os.path.abspath(x) for x in args]
 
   if flags.vals:
     args += flags.vals
 
+  # NOTE(tk) ncurses and piped input. google 'use ncurses with pipe "python"'
+  # option 1:
+    # copy parent's stdin from shell e.g. `$ ls | python fuzzyselect.py 3<&0`
+    # then in python call `os.dup2(3, 0)` before opening curses
+  # cf. https://stackoverflow.com/questions/65978574/how-can-i-use-python-curses-with-stdin
+  # cf. https://stackoverflow.com/questions/53696818/how-to-i-make-python-curses-application-pipeline-friendly
+  if not args:
+    args = [x.strip() for x in sys.stdin]
+
+    # option 2: copy old stdin into python
+    oldstdin = os.dup(0)
+    terminal = open('/dev/tty')
+    os.dup2(terminal.fileno(), 0)
+
+  if flags.dir:
+    args = [os.path.abspath(x) for x in args]
+
   result = curses.wrapper(filter_term, args)
+
   if flags.dir:
     result = os.path.abspath(result)
 
