@@ -80,6 +80,10 @@ class Input:
     self.pos = pos
     self.state = ''
 
+  def __iter__(self):
+    while True:
+      yield self()
+
   def __call__(self):
     s = self.state
     c = self.stdscr.getch(self.pos, len(s) + 1)
@@ -101,16 +105,14 @@ class Input:
     return self.state, status
 
 
-def filter_term(stdscr, items: list):
+def filter_ncurses_app(stdscr, items: list):
   renderer = ListRenderer(items, stdscr)
   renderer(items, 0)
 
   items = ListOption(items, [renderer])
-  in_ = Input(stdscr)
 
   curses.noecho()
-  while True:
-    s, status = in_()
+  for s, status in Input(stdscr):
     items.apply(s)
     if uiutils.is_key(curses.KEY_ENTER, status):
       return items.get()
@@ -145,7 +147,7 @@ if __name__ == '__main__':
     if flags.dir:
       args = [os.path.abspath(x) for x in args]
 
-    result = curses.wrapper(filter_term, args)
+    result = curses.wrapper(filter_ncurses_app, args)
 
     if flags.dir:
       result = os.path.abspath(result)
