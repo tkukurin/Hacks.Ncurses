@@ -1,6 +1,16 @@
+import itertools as it
 import os
 import sys
 from contextlib import contextmanager
+
+
+def walk_pruned(dir_: str, limit=500):
+  '''Prune directory contents using heuristics.'''
+  skipwalk = lambda f: any(f.startswith(x) for x in ('__', '.'))
+  for root, dirs, files in it.islice(os.walk(dir_), 0, limit):
+    files = [f for f in files if not skipwalk(f)]
+    dirs[:] = [d for d in dirs if not skipwalk(d)]
+    yield from map(lambda f: f'{root}/{f}', files)
 
 
 # NOTE(tk) ncurses and piped input. google 'use ncurses with pipe "python"'
@@ -9,8 +19,6 @@ from contextlib import contextmanager
   # then in python call `os.dup2(3, 0)` before opening curses
 # cf. https://stackoverflow.com/questions/65978574/how-can-i-use-python-curses-with-stdin
 # cf. https://stackoverflow.com/questions/53696818/how-to-i-make-python-curses-application-pipeline-friendly
-
-
 @contextmanager
 def new_tty():
   # NOTE(tk) not sure how hacky this is

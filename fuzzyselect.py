@@ -9,7 +9,7 @@ Example:
 import itertools as it
 import os
 import curses
-import uiutils
+from utils import uiutils
 
 
 def fuzzymatch(search_term_cased: str):
@@ -130,12 +130,15 @@ if __name__ == '__main__':
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
   parser.add_argument(
     '-d', '--dir', help='If specified, will expand abspath', nargs='?', const=True)
+  parser.add_argument(
+    '-w', '--walk', help='Walk subdirs', action='store_true', default=False)
   flags = parser.parse_args()
 
   args = []
 
   if flags.dir and isinstance(flags.dir, str):
-    args = os.listdir(os.path.expanduser(flags.dir))
+    d = os.path.expanduser(flags.dir)
+    args = list(utils.walk_pruned(d)) if flags.walk else os.listdir(d)
 
   if flags.vals:
     args += flags.vals
