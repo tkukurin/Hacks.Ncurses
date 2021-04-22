@@ -49,35 +49,48 @@ class ListOption:
     return self.active[self.choice] if self.active else None
 
 
-class ListRenderer:
-  def __init__(self, items, stdscr):
-    self.items = items
+class WidthAware:
+  def __init__(self, stdscr, longest=None):
     self.stdscr = stdscr
-    self.longest = max(map(len, items), default=0)
+    self.longest = longest
+    _, W = self.stdscr.getmaxyx()
+    self.max_strl = min(W - 2, self.longest or W - 2)
+
+  def _guardw(self, w):
+    return min(self.max_strl, w)
+
+  def _display(self, y, x, s, *a):
+    return self.stdscr.addstr(y, min(x, self.max_strl), s[:self.max_strl], *a)
+
+
+class ListRenderer(WidthAware):
+  def __init__(self, items, stdscr):
+    super().__init__(stdscr, longest=max(map(len, items), default=0))
+    self.items = items
 
   def __call__(self, active, chosen):
     H, W = self.stdscr.getmaxyx()
-
     H = min(H, len(self.items) + 2)
-    W = min(W - 2, self.longest)
+    self.max_strl = min(W - 2, self.longest)
 
     items_shown = H - 2
     start_ix = max(0, chosen - items_shown + 1)
     stop_ix = start_ix + items_shown
 
     for i in range(2, H):
-      self.stdscr.addstr(i, 1, ' ' * W)
+      self._display(i, 1, ' ' * self.longest)
 
     items_shown = it.islice(active, start_ix, stop_ix)
     for i, item in enumerate(items_shown, start=2):
-      self.stdscr.addstr(i, 1, item)
+      self._display(i, 1, item)
 
     if chosen < len(active):  # make selection
-      self.stdscr.addstr(min(H - 1, chosen + 2), 1, active[chosen], curses.A_REVERSE)
+      self._display(min(H - 1, chosen + 2), 1, active[chosen], curses.A_REVERSE)
 
 
-class Input:
+class Input(WidthAware):
   def __init__(self, stdscr, pos=1):
+    super().__init__(stdscr)
     self.stdscr = stdscr
     self.pos = pos
     self.state = ''
@@ -88,21 +101,19 @@ class Input:
 
   def __call__(self):
     s = self.state
-    c = self.stdscr.getch(self.pos, len(s) + 1)
+    c = self.stdscr.getch(self.pos, self._guardw(len(s) + 1))
     status = None
     if uiutils.is_key(curses.KEY_BACKSPACE, c):
       s = s[:-1]
-      self.stdscr.addstr(self.pos, len(s) + 1, ' ')
+      self._display(self.pos, len(s) + 1, ' ')
     elif any(uiutils.is_key(k, c) for k in (
         curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
     else:
-      try:
+      with utils.noexcept():
         if (cstr := chr(c)).isprintable():
           s += cstr
-      except:
-        pass
-    self.stdscr.addstr(1, 1, s)
+    self._display(1, 1, s[-self.max_strl:])
     self.state = s
     return self.state, status
 

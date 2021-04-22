@@ -1,10 +1,12 @@
 import itertools as it
 import os
 import sys
-from contextlib import contextmanager
+import contextlib
 
 
 fmap = lambda f, xs: (y for ys in xs for y in f(ys))
+
+noexcept = contextlib.suppress
 
 
 def walk_pruned(dir_: str):
@@ -22,7 +24,7 @@ def walk_pruned(dir_: str):
   # then in python call `os.dup2(3, 0)` before opening curses
 # cf. https://stackoverflow.com/questions/65978574/how-can-i-use-python-curses-with-stdin
 # cf. https://stackoverflow.com/questions/53696818/how-to-i-make-python-curses-application-pipeline-friendly
-@contextmanager
+@contextlib.contextmanager
 def new_tty():
   # NOTE(tk) not sure how hacky this is
 
