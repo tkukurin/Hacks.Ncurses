@@ -122,6 +122,8 @@ def filter_term(stdscr, items: list):
 if __name__ == '__main__':
   import sys
   import argparse
+  import utils
+
   parser = argparse.ArgumentParser()
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
   parser.add_argument(
@@ -136,36 +138,17 @@ if __name__ == '__main__':
   if flags.vals:
     args += flags.vals
 
-  # NOTE(tk) ncurses and piped input. google 'use ncurses with pipe "python"'
-  # option 1:
-    # copy parent's stdin from shell e.g. `$ ls | python fuzzyselect.py 3<&0`
-    # then in python call `os.dup2(3, 0)` before opening curses
-  # cf. https://stackoverflow.com/questions/65978574/how-can-i-use-python-curses-with-stdin
-  # cf. https://stackoverflow.com/questions/53696818/how-to-i-make-python-curses-application-pipeline-friendly
-  oldstdout = None
-  oldstdin = None
-  if not args:
-    args = [x.strip() for x in sys.stdin]
+  with utils.new_tty() as (old_in, old_out):
+    if not args:
+      args = [x.strip() for x in old_in]
 
-    # option 2: copy old stdin into python
-    oldstdin = os.dup(0)
-    oldstdout = os.dup(1)
-    terminalr = open('/dev/tty')
-    terminalw = open('/dev/tty', 'w')
-    os.dup2(terminalr.fileno(), 0)
-    os.dup2(terminalw.fileno(), 1)
+    if flags.dir:
+      args = [os.path.abspath(x) for x in args]
 
-  if flags.dir:
-    args = [os.path.abspath(x) for x in args]
+    result = curses.wrapper(filter_term, args)
 
-  result = curses.wrapper(filter_term, args)
-
-  if flags.dir:
-    result = os.path.abspath(result)
-
-  if oldstdout:
-    os.dup2(oldstdin, 0)
-    os.dup2(oldstdout, 1)
+    if flags.dir:
+      result = os.path.abspath(result)
 
   print(result)
 
