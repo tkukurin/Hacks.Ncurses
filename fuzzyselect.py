@@ -3,8 +3,10 @@
 '''Emulates fzf-like behavior.
 My attempt at learning Python ncurses.
 Example:
-  $ python fuzzyselect.py --dir .
-  $ python fuzzyselect.py first second third
+  $ python fuzzyselect.py -f .
+  $ python fuzzyselect.py **/*py
+  $ ls | python fuzzyselect.py
+  $ vim (python fuzzyselect.py *py)
 '''
 import itertools as it
 import os
