@@ -4,10 +4,13 @@ import sys
 from contextlib import contextmanager
 
 
-def walk_pruned(dir_: str, limit=500):
+fmap = lambda f, xs: (y for ys in xs for y in f(ys))
+
+
+def walk_pruned(dir_: str):
   '''Prune directory contents using heuristics.'''
   skipwalk = lambda f: any(f.startswith(x) for x in ('__', '.'))
-  for root, dirs, files in it.islice(os.walk(dir_), 0, limit):
+  for root, dirs, files in os.walk(dir_):
     files = [f for f in files if not skipwalk(f)]
     dirs[:] = [d for d in dirs if not skipwalk(d)]
     yield from map(lambda f: f'{root}/{f}', files)
@@ -30,7 +33,7 @@ def new_tty():
   os.dup2(terminalr.fileno(), 0)
   os.dup2(terminalw.fileno(), 1)
 
-  yield os.fdopen(oldstdin), os.fdopen(oldstdout)
+  yield
 
   os.dup2(oldstdin, 0)
   os.dup2(oldstdout, 1)

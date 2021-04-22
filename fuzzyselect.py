@@ -57,7 +57,7 @@ class ListRenderer:
     H, W = self.stdscr.getmaxyx()
 
     H = min(H, len(self.items) + 2)
-    W = min(W, self.longest)
+    W = min(W - 2, self.longest)
 
     items_shown = H - 2
     start_ix = max(0, chosen - items_shown + 1)
@@ -70,7 +70,7 @@ class ListRenderer:
     for i, item in enumerate(items_shown, start=2):
       self.stdscr.addstr(i, 1, item)
 
-    if chosen < len(active):
+    if chosen < len(active):  # make selection
       self.stdscr.addstr(min(H - 1, chosen + 2), 1, active[chosen], curses.A_REVERSE)
 
 
@@ -129,31 +129,25 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
   parser.add_argument(
-    '-d', '--dir', help='If specified, will expand abspath', nargs='?', const=True)
-  parser.add_argument(
-    '-w', '--walk', help='Walk subdirs', action='store_true', default=False)
+    '-f', '--files', help='valid files only', action='store_true', default=True)
   flags = parser.parse_args()
 
-  args = []
+  args = flags.vals
+  if not sys.stdin.isatty():  # has piped data
+    args += [x.strip() for x in sys.stdin]
 
-  if flags.dir and isinstance(flags.dir, str):
-    d = os.path.expanduser(flags.dir)
-    args = list(utils.walk_pruned(d)) if flags.walk else os.listdir(d)
+  if not args:  # if no args here, assume we want to walk current directory.
+    args = map(os.path.abspath, utils.walk_pruned('.'))
 
-  if flags.vals:
-    args += flags.vals
+  if flags.files:  # only reatin files
+    if all(os.path.isdir(x) for x in args):
+      args = utils.fmap(utils.walk_pruned, args)
+    args = map(os.path.abspath, args)
+    args = filter(os.path.isfile, args)
 
-  with utils.new_tty() as (old_in, old_out):
-    if not args:
-      args = [x.strip() for x in old_in]
-
-    if flags.dir:
-      args = [os.path.abspath(x) for x in args]
-
+  args = args if isinstance(args, list) else list(it.islice(args, 0, 500))
+  with utils.new_tty():
     result = curses.wrapper(filter_ncurses_app, args)
-
-    if flags.dir:
-      result = os.path.abspath(result)
 
   print(result)
 
