@@ -1,8 +1,11 @@
+import collections as col
 import itertools as it
 import os
 import sys
 import contextlib
 
+
+yx = col.namedtuple('yx', 'y x')
 
 fmap = lambda f, xs: (y for ys in xs for y in f(ys))
 

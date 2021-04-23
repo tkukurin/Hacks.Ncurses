@@ -11,7 +11,9 @@ Example:
 import itertools as it
 import os
 import curses
+
 from utils import uiutils
+from utils import yx
 
 
 def fuzzymatch(search_term_cased: str):
@@ -50,82 +52,101 @@ class ListOption:
 
 
 class WidthAware:
-  def __init__(self, stdscr, longest=None):
+  def __init__(self, stdscr, bounds):
     self.stdscr = stdscr
-    self.longest = longest
-    _, W = self.stdscr.getmaxyx()
-    self.max_strl = min(W - 2, self.longest or W - 2)
+    # indices are assumed inclusive.
+    (self.y0, self.x0), (self.y1, self.x1) = bounds
 
-  def _guardw(self, w):
-    return min(self.max_strl, w)
+  @property
+  def width(self): return self.x1 - self.x0 + 1
 
-  def _display(self, y, x, s, *a):
-    return self.stdscr.addstr(y, min(x, self.max_strl), s[:self.max_strl], *a)
+  @property
+  def height(self): return self.y1 - self.y0 + 1
+
+  @property
+  def rows(self): return range(self.y0, self.y1 + 1)
+
+  def _guardx(self, x):
+    return max(self.x0, min(self.x1, x))
+
+  def _guardy(self, y):
+    return max(self.y0, min(self.y1, y))
+
+  def _guardw(self, w, x=None):
+    x = x or self.x0
+    return max(0, min(self.x1 - x, w))
+
+  def _guardh(self, h, y=None):
+    y = y or self.y0
+    return max(0, min(self.y1 - y, h))
+
+  def _display(self, y, x, s, *a, **kw):
+    y = self._guardy(y)
+    x = self._guardx(x)
+    w = self._guardw(len(s), x)
+    return self.stdscr.addstr(y, x, s[:w], *a, **kw)
 
 
 class ListRenderer(WidthAware):
-  def __init__(self, items, stdscr):
-    super().__init__(stdscr, longest=max(map(len, items), default=0))
+  def __init__(self, items, stdscr, bounds):
+    super().__init__(stdscr, bounds)
     self.items = items
 
-  def __call__(self, active, chosen):
-    H, W = self.stdscr.getmaxyx()
-    H = min(H, len(self.items) + 2)
-    self.max_strl = min(W - 2, self.longest)
+  def __call__(self, active: list, chosen_ix: int):
+    blanking = ' ' * self.width
+    [self._display(y, self.x0, blanking) for y in self.rows]
 
-    items_shown = H - 2
-    start_ix = max(0, chosen - items_shown + 1)
+    items_shown = self.height
+    start_ix = max(0, chosen_ix - items_shown + 1)
     stop_ix = start_ix + items_shown
+    row_item = enumerate(it.islice(active, start_ix, stop_ix), start=self.y0)
+    [self._display(y, self.x0, item) for y, item in row_item]
 
-    for i in range(2, H):
-      self._display(i, 1, ' ' * self.longest)
-
-    items_shown = it.islice(active, start_ix, stop_ix)
-    for i, item in enumerate(items_shown, start=2):
-      self._display(i, 1, item)
-
-    if chosen < len(active):  # make selection
-      self._display(min(H - 1, chosen + 2), 1, active[chosen], curses.A_REVERSE)
+    if chosen_ix < len(active):  # make selection
+      y = self._guardy(chosen_ix + 2)
+      self._display(y, self.x0, active[chosen_ix], curses.A_REVERSE)
 
 
 class Input(WidthAware):
-  def __init__(self, stdscr, pos=1):
-    super().__init__(stdscr)
+  def __init__(self, stdscr, bounds):
+    super().__init__(stdscr, bounds)
     self.stdscr = stdscr
-    self.pos = pos
     self.state = ''
 
   def __iter__(self):
     while True:
       yield self()
 
+  def _display(self, y, x, s, *a, **kw):
+    w = self._guardw(len(s))
+    return super()._display(y, x, s[-w:], *a, **kw)
+
   def __call__(self):
-    s = self.state
-    c = self.stdscr.getch(self.pos, self._guardw(len(s) + 1))
+    c = self.stdscr.getch(self.y0, self._guardx(len(self.state) + 1))
     status = None
     if uiutils.is_key(curses.KEY_BACKSPACE, c):
-      s = s[:-1]
-      self._display(self.pos, len(s) + 1, ' ')
+      self.state = self.state[:-1]
+      self._display(self.y0, len(self.state) + 1, ' ')
     elif any(uiutils.is_key(k, c) for k in (
         curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
     else:
-      with utils.noexcept():
+      with utils.noexcept(Exception):
         if (cstr := chr(c)).isprintable():
-          s += cstr
-    self._display(1, 1, s[-self.max_strl:])
-    self.state = s
+          self.state += cstr
+    self._display(self.y0, self.x0, self.state)
     return self.state, status
 
 
 def filter_ncurses_app(stdscr, items: list):
-  renderer = ListRenderer(items, stdscr)
+  Ym, Xm = map(lambda x: x-1, stdscr.getmaxyx())
+  renderer = ListRenderer(items, stdscr, bounds=(yx(2, 1), yx(Ym, Xm)))
   renderer(items, 0)
 
   items = ListOption(items, [renderer])
 
   curses.noecho()
-  for s, status in Input(stdscr):
+  for s, status in Input(stdscr, bounds=(yx(1, 1), yx(1, Xm))):
     items.apply(s)
     if uiutils.is_key(curses.KEY_ENTER, status):
       return items.get()
