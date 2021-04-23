@@ -173,7 +173,7 @@ if __name__ == '__main__':
   if not args:  # if no args here, assume we want to walk current directory.
     args = map(os.path.abspath, utils.walk_pruned('.'))
 
-  if flags.files:  # only reatin files
+  if flags.files:  # only retain files
     if all(os.path.isdir(x) for x in args):
       args = utils.fmap(utils.walk_pruned, args)
     args = map(os.path.abspath, args)
