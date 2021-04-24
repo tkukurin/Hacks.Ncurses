@@ -37,18 +37,22 @@ class ListOption:
     self.active = list(filter(fuzzymatch(filter_str), self.items))
     if self.choice >= len(self.active):
       self.choice = 0
-    [l(self.active, self.choice) for l in self.listeners]
+    self._notify(self.active, self.choice)
     return self.active
 
   def handle(self, key):
     if uiutils.is_key(curses.KEY_DOWN, key): self.choice = self.choice + 1
     elif uiutils.is_key(curses.KEY_UP, key): self.choice = self.choice - 1
     self.choice = (self.choice + len(self.active)) % len(self.active)
-    [l(None, self.choice) for l in self.listeners]
+    self._notify(None, self.choice)
     return self.choice
 
   def get(self):
     return self.active[self.choice] if self.active else None
+
+  def _notify(self, *a, **kw):
+    for l in self.listeners:
+      l(*a, **kw)
 
 
 class WidthAware:
@@ -105,8 +109,8 @@ class ListRenderer(WidthAware):
     active = old_active if active is None else active
 
     if redraw_single:
-      self._blank([old_chosen_ix + self.y0])
-      self._display(old_chosen_ix + self.y0, self.x0, active[old_chosen_ix])
+      y = self._guardy(old_chosen_ix + self.y0)
+      self._blank([y]); self._display(y, self.x0, active[old_chosen_ix])
     else:
       self._blank()
       items_shown = it.islice(active, start_ix, start_ix + self.height)
@@ -114,7 +118,7 @@ class ListRenderer(WidthAware):
         self._display(y, self.x0, item)
 
     if chosen_ix < len(active):  # make selection
-      y = self._guardy(chosen_ix + 2)
+      y = self._guardy(chosen_ix + self.y0)
       self._display(y, self.x0, active[chosen_ix], curses.A_REVERSE)
 
     self._cache = (start_ix, chosen_ix, active)
@@ -156,7 +160,7 @@ class Input(WidthAware):
 def filter_ncurses_app(stdscr, items: list):
   Ym, Xm = map(lambda x: x-1, stdscr.getmaxyx())
   renderer = ListRenderer(stdscr, bounds=(yx(2, 1), yx(Ym, Xm)))
-  items = ListOption(items, [renderer])
+  items = ListOption(items, listeners=[renderer])
 
   renderer(items.items, 0)
 
