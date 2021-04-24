@@ -44,7 +44,7 @@ class ListOption:
     if uiutils.is_key(curses.KEY_DOWN, key): self.choice = self.choice + 1
     elif uiutils.is_key(curses.KEY_UP, key): self.choice = self.choice - 1
     self.choice = (self.choice + len(self.active)) % len(self.active)
-    [l(self.active, self.choice) for l in self.listeners]
+    [l(None, self.choice) for l in self.listeners]
     return self.choice
 
   def get(self):
@@ -80,9 +80,10 @@ class WidthAware:
     y = y or self.y0
     return max(0, min(self.y1 - y, h))
 
-  def _blank(self):
+  def _blank(self, rows=None):
     blanking = ' ' * self.width
-    [self._display(y, self.x0, blanking) for y in self.rows]
+    for y in (rows or self.rows):
+      self._display(y, self.x0, blanking)
 
   def _display(self, y, x, s, *a, **kw):
     y = self._guardy(y)
@@ -92,17 +93,31 @@ class WidthAware:
 
 
 class ListRenderer(WidthAware):
-  def __call__(self, active: list, chosen_ix: int):
-    self._blank()
+  def __init__(self, stdscr, bounds):
+    super().__init__(stdscr, bounds)
+    self._cache = (None, None, [])
 
-    items_shown = self.height
-    start_ix = max(0, chosen_ix - items_shown + 1)
-    [self._display(y, self.x0, item) for y, item in enumerate(
-      it.islice(active, start_ix, start_ix + items_shown), start=self.y0)]
+  def __call__(self, active: list, chosen_ix: int):
+    old_start_ix, old_chosen_ix, old_active = self._cache
+    start_ix = max(0, chosen_ix - self.height + 1)
+
+    redraw_single = active is None and old_start_ix == start_ix
+    active = old_active if active is None else active
+
+    if redraw_single:
+      self._blank([old_chosen_ix + self.y0])
+      self._display(old_chosen_ix + self.y0, self.x0, active[old_chosen_ix])
+    else:
+      self._blank()
+      items_shown = it.islice(active, start_ix, start_ix + self.height)
+      for y, item in enumerate(items_shown, start=self.y0):
+        self._display(y, self.x0, item)
 
     if chosen_ix < len(active):  # make selection
       y = self._guardy(chosen_ix + 2)
       self._display(y, self.x0, active[chosen_ix], curses.A_REVERSE)
+
+    self._cache = (start_ix, chosen_ix, active)
 
 
 class Input(WidthAware):
