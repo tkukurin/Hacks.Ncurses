@@ -8,9 +8,9 @@ Example:
   $ ls | python fuzzyselect.py
   $ vim (python fuzzyselect.py *py)
 '''
-import itertools as it
 import os
 import curses
+import itertools as it
 
 from utils import uiutils
 from utils import yx
@@ -40,9 +40,9 @@ class ListOption:
     [l(self.active, self.choice) for l in self.listeners]
     return self.active
 
-  def handle(self, dir_):
-    if dir_ == curses.KEY_DOWN: self.choice = self.choice + 1
-    if dir_ == curses.KEY_UP: self.choice = self.choice - 1
+  def handle(self, key):
+    if uiutils.is_key(curses.KEY_DOWN, key): self.choice = self.choice + 1
+    elif uiutils.is_key(curses.KEY_UP, key): self.choice = self.choice - 1
     self.choice = (self.choice + len(self.active)) % len(self.active)
     [l(self.active, self.choice) for l in self.listeners]
     return self.choice
@@ -80,6 +80,10 @@ class WidthAware:
     y = y or self.y0
     return max(0, min(self.y1 - y, h))
 
+  def _blank(self):
+    blanking = ' ' * self.width
+    [self._display(y, self.x0, blanking) for y in self.rows]
+
   def _display(self, y, x, s, *a, **kw):
     y = self._guardy(y)
     x = self._guardx(x)
@@ -88,19 +92,13 @@ class WidthAware:
 
 
 class ListRenderer(WidthAware):
-  def __init__(self, items, stdscr, bounds):
-    super().__init__(stdscr, bounds)
-    self.items = items
-
   def __call__(self, active: list, chosen_ix: int):
-    blanking = ' ' * self.width
-    [self._display(y, self.x0, blanking) for y in self.rows]
+    self._blank()
 
     items_shown = self.height
     start_ix = max(0, chosen_ix - items_shown + 1)
-    stop_ix = start_ix + items_shown
-    row_item = enumerate(it.islice(active, start_ix, stop_ix), start=self.y0)
-    [self._display(y, self.x0, item) for y, item in row_item]
+    [self._display(y, self.x0, item) for y, item in enumerate(
+      it.islice(active, start_ix, start_ix + items_shown), start=self.y0)]
 
     if chosen_ix < len(active):  # make selection
       y = self._guardy(chosen_ix + 2)
@@ -110,7 +108,6 @@ class ListRenderer(WidthAware):
 class Input(WidthAware):
   def __init__(self, stdscr, bounds):
     super().__init__(stdscr, bounds)
-    self.stdscr = stdscr
     self.state = ''
 
   def __iter__(self):
@@ -121,8 +118,11 @@ class Input(WidthAware):
     w = self._guardw(len(s))
     return super()._display(y, x, s[-w:], *a, **kw)
 
+  def _getchar(self):
+    return self.stdscr.getch(self.y0, self._guardx(len(self.state) + 1))
+
   def __call__(self):
-    c = self.stdscr.getch(self.y0, self._guardx(len(self.state) + 1))
+    c = self._getchar()
     status = None
     if uiutils.is_key(curses.KEY_BACKSPACE, c):
       self.state = self.state[:-1]
@@ -140,10 +140,10 @@ class Input(WidthAware):
 
 def filter_ncurses_app(stdscr, items: list):
   Ym, Xm = map(lambda x: x-1, stdscr.getmaxyx())
-  renderer = ListRenderer(items, stdscr, bounds=(yx(2, 1), yx(Ym, Xm)))
-  renderer(items, 0)
-
+  renderer = ListRenderer(stdscr, bounds=(yx(2, 1), yx(Ym, Xm)))
   items = ListOption(items, [renderer])
+
+  renderer(items.items, 0)
 
   curses.noecho()
   for s, status in Input(stdscr, bounds=(yx(1, 1), yx(1, Xm))):
@@ -164,6 +164,9 @@ if __name__ == '__main__':
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
   parser.add_argument(
     '-f', '--files', help='valid files only', action='store_true', default=True)
+  parser.add_argument(
+    '-a', '--abs', help='expand paths', action='store_true', default=False)
+  parser.add_argument('-l', '--limit', help='limit num entries', default=500)
   flags = parser.parse_args()
 
   args = flags.vals
@@ -171,15 +174,17 @@ if __name__ == '__main__':
     args += [x.strip() for x in sys.stdin]
 
   if not args:  # if no args here, assume we want to walk current directory.
-    args = map(os.path.abspath, utils.walk_pruned('.'))
+    args = utils.walk_pruned('.')
 
   if flags.files:  # only retain files
     if all(os.path.isdir(x) for x in args):
       args = utils.fmap(utils.walk_pruned, args)
-    args = map(os.path.abspath, args)
     args = filter(os.path.isfile, args)
 
-  args = args if isinstance(args, list) else list(it.islice(args, 0, 500))
+  if flags.abs:
+    args = map(os.path.abspath, args)
+
+  args = args if isinstance(args, list) else list(it.islice(args, flags.limit))
   with utils.new_tty():
     result = curses.wrapper(filter_ncurses_app, args)
 
