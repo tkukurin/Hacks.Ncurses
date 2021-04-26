@@ -20,38 +20,46 @@ from utils import yx
 L = utils.logcfg(__name__).disable()
 
 
-def fuzzymatch_score(search_term_cased: str):
+def fuzzymatch_score(search_term_cased: str, with_ix=False):
   search_term = search_term_cased.lower()
-  def fuzzy_inner(test_against: str):
-    last_match = -1
-    iterm = 0
-    score = 1
-    for i, letter in enumerate(test_against.lower()):
-      if iterm == len(search_term): break
-      if letter == search_term[iterm]:
-        score += 1.0 / (i - last_match)
-        iterm += 1
-        last_match = i
-    return score * (iterm == len(search_term))
-  return fuzzy_inner
+  def fuzzy_inner(test_against: str, start=0):
+    test_against = test_against.lower()
+    score = 0
+    for iterm, char in enumerate(search_term):
+      if (last_match := test_against.find(char, start)) < 0: return 0
+      score += 1.0 / (last_match - start + 1)
+      start = last_match + 1
+    return (i, score) if with_ix else score
+  return fuzzy_inner if search_term else (lambda x: 1)
 
 
 class ListOption:
   def __init__(self, items, listeners=None):
     self.items = items
+    self.active = self.items
     self.listeners = listeners or []
     self.choice = 0
+    self.filter_str = ''
+
+  def apply_stream(self, next_char: str):
+    # TODO(tk) store idxs of last match for each self.active
+    # then just filter remaining actives
+    pass
 
   def apply(self, filter_str: str):
-    scored = zip(map(fuzzymatch_score(filter_str), self.items), self.items,)
+    # NOTE(tk) technically should check if substrings match but whatevs
+    xs = self.items if len(filter_str) < len(self.filter_str) else self.active
+    scored = zip(map(fuzzymatch_score(filter_str), xs), xs)
     scored = filter(lambda score_item_tpl: score_item_tpl[0], scored)
-    self.active = [str_ for _, str_ in sorted(scored, reverse=True)]
+    self.active = [str_ for s, str_ in sorted(scored, reverse=True)]
     if self.choice >= len(self.active):
       self.choice = 0
     self._notify(self.active, self.choice)
+    self.filter_str = filter_str
     return self.active
 
   def handle(self, key):
+    if not self.active: return -1
     if uiutils.is_key(curses.KEY_DOWN, key): self.choice = self.choice + 1
     elif uiutils.is_key(curses.KEY_UP, key): self.choice = self.choice - 1
     self.choice = (self.choice + len(self.active)) % len(self.active)
