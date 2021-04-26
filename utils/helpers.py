@@ -1,8 +1,24 @@
+import logging
 import collections as col
 import itertools as it
 import os
 import sys
 import contextlib
+
+
+def logcfg(name=None, level=logging.DEBUG, to_file=None):
+  logging.basicConfig(
+    format='[%(levelname)s|%(module)s:%(lineno)s|%(asctime)s] %(message)s',
+    datefmt='%y-%m-%d %X',
+    level=level)
+  L = logging.getLogger(name)
+  L.setLevel(level)
+  if to_file:
+    handler = logging.FileHandler(to_file)
+    L.addHandler(handler)
+  # dumb simple hack but ok
+  L.disable = lambda *a: (L.setLevel(900) or L)
+  return L
 
 
 yx = col.namedtuple('yx', 'y x')

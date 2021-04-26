@@ -12,18 +12,27 @@ import os
 import curses
 import itertools as it
 
+import utils
 from utils import uiutils
 from utils import yx
 
 
-def fuzzymatch(search_term_cased: str):
+L = utils.logcfg(__name__).disable()
+
+
+def fuzzymatch_score(search_term_cased: str):
   search_term = search_term_cased.lower()
   def fuzzy_inner(test_against: str):
+    last_match = -1
     iterm = 0
-    for letter in test_against.lower():
+    score = 1
+    for i, letter in enumerate(test_against.lower()):
       if iterm == len(search_term): break
-      iterm += (letter == search_term[iterm])
-    return iterm == len(search_term)
+      if letter == search_term[iterm]:
+        score += 1.0 / (i - last_match)
+        iterm += 1
+        last_match = i
+    return score * (iterm == len(search_term))
   return fuzzy_inner
 
 
@@ -34,7 +43,9 @@ class ListOption:
     self.choice = 0
 
   def apply(self, filter_str: str):
-    self.active = list(filter(fuzzymatch(filter_str), self.items))
+    scored = zip(map(fuzzymatch_score(filter_str), self.items), self.items,)
+    scored = filter(lambda score_item_tpl: score_item_tpl[0], scored)
+    self.active = [str_ for _, str_ in sorted(scored, reverse=True)]
     if self.choice >= len(self.active):
       self.choice = 0
     self._notify(self.active, self.choice)
@@ -90,6 +101,7 @@ class WidthAware:
       self._display(y, self.x0, blanking)
 
   def _display(self, y, x, s, *a, **kw):
+    s = str(s)
     y = self._guardy(y)
     x = self._guardx(x)
     w = self._guardw(len(s), x)
@@ -161,8 +173,7 @@ def filter_ncurses_app(stdscr, items: list):
   Ym, Xm = map(lambda x: x-1, stdscr.getmaxyx())
   renderer = ListRenderer(stdscr, bounds=(yx(2, 1), yx(Ym, Xm)))
   items = ListOption(items, listeners=[renderer])
-
-  renderer(items.items, 0)
+  items.apply('')
 
   curses.noecho()
   for s, status in Input(stdscr, bounds=(yx(1, 1), yx(1, Xm))):
@@ -177,7 +188,6 @@ def filter_ncurses_app(stdscr, items: list):
 if __name__ == '__main__':
   import sys
   import argparse
-  import utils
 
   parser = argparse.ArgumentParser()
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
@@ -205,7 +215,6 @@ if __name__ == '__main__':
 
   args = args if isinstance(args, list) else list(it.islice(args, flags.limit))
   with utils.new_tty():
-    result = curses.wrapper(filter_ncurses_app, args)
-
-  print(result)
+    if (result := curses.wrapper(filter_ncurses_app, args)):
+      print(result)
 
