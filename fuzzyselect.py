@@ -166,8 +166,11 @@ class Input(WidthAware):
     if uiutils.is_key(curses.KEY_BACKSPACE, c):
       self.state = self.state[:-1]
       self._display(self.y0, len(self.state) + 1, ' ')
+    elif c == 27: status = curses.KEY_EXIT  # esc
+    elif c == 14: status = curses.KEY_DOWN  # ctrl-n
+    elif c == 16: status = curses.KEY_UP    # ctrl-p
     elif any(uiutils.is_key(k, c) for k in (
-        curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
+        curses.KEY_EXIT, curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
       status = c
     else:
       with utils.noexcept(Exception):
@@ -188,6 +191,8 @@ def filter_ncurses_app(stdscr, items: list):
     items.apply(s)
     if uiutils.is_key(curses.KEY_ENTER, status):
       return items.get()
+    elif uiutils.is_key(curses.KEY_EXIT, status):
+      break
     elif status is not None:
       items.handle(status)
     stdscr.refresh()
@@ -196,6 +201,9 @@ def filter_ncurses_app(stdscr, items: list):
 if __name__ == '__main__':
   import sys
   import argparse
+
+  import signal  # more graceful exit
+  signal.signal(signal.SIGINT, lambda *_: exit(0))
 
   parser = argparse.ArgumentParser()
   parser.add_argument('vals', help='Values to fuzzymatch', nargs='*')
