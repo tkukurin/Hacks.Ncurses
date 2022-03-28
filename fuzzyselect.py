@@ -166,11 +166,12 @@ class Input(WidthAware):
     if uiutils.is_key(curses.KEY_BACKSPACE, c):
       self.state = self.state[:-1]
       self._display(self.y0, len(self.state) + 1, ' ')
-    elif c == 27: status = curses.KEY_EXIT  # esc
-    elif c == 14: status = curses.KEY_DOWN  # ctrl-n
-    elif c == 16: status = curses.KEY_UP    # ctrl-p
     elif any(uiutils.is_key(k, c) for k in (
-        curses.KEY_EXIT, curses.KEY_DOWN, curses.KEY_UP, curses.KEY_ENTER)):
+        curses.KEY_EXIT,
+        curses.KEY_DOWN,
+        curses.KEY_UP,
+        curses.KEY_ENTER
+    )):
       status = c
     else:
       with utils.noexcept(Exception):
